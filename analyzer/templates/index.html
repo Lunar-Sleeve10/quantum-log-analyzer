@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hybrid Log Analyzer Dashboard</title>
+    <style>
+        *, *:before, *:after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Open Sans', Helvetica, Arial, sans-serif; background: #f4f4f4; color: #333; }
+        input, button { border: none; outline: none; background: none; font-family: 'Open Sans', Helvetica, Arial, sans-serif; }
+        h2, h3 { width: 100%; text-align: left; color: #333; margin-bottom: 15px; }
+
+        nav { display: flex; justify-content: space-between; align-items: center; padding: 1em 2em; background: #ffffff; box-shadow: 0 2px 10px rgba(70, 70, 70, 0.1); }
+        nav .logo { font-size: 1.5em; font-weight: bold; color: #d4af7a; }
+        nav .user-info { color: #888; }
+        nav .logout-btn { background: #dc3545; color: white; padding: 8px 15px; border-radius: 20px; text-decoration: none; margin-left: 15px; font-size: 0.9em; cursor: pointer; }
+
+        .main-container { max-width: 1200px; margin: 20px auto; padding: 20px; }
+        .card { background: #fff; border-radius: 20px; box-shadow: 0 10px 15px rgba(70, 70, 70, 0.1); padding: 25px; margin-bottom: 25px; overflow: hidden; }
+
+        .submit-btn { display: inline-block; margin: 0; width: 260px; height: 40px; border-radius: 30px; background: #d4af7a; color: #fff; font-size: 15px; text-transform: uppercase; cursor: pointer; text-align: center; line-height: 40px; }
+        .submit-btn:disabled { background: #999; cursor: not-allowed; }
+
+        .file-upload-wrapper { display: flex; align-items: center; gap: 15px; }
+        .file-upload-btn { display: inline-block; padding: 10px 20px; background: #007acc; color: white; border-radius: 30px; cursor: pointer; }
+        #log_file { display: none; }
+        #file-name-display { color: #555; font-style: italic; }
+
+        #loader-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .loader {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #d4af7a;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .ai-explanation-box { border-left: 5px solid #d4af7a; padding: 20px; background-color: #fdfaf5; border-radius: 8px; }
+        .ai-explanation-box pre { white-space: pre-wrap; word-wrap: break-word; font-size: 1.1em; color: #555; line-height: 1.6; }
+        .chart-container { text-align: center; padding: 20px; }
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border-bottom: 1px solid #ddd; padding: 12px 15px; text-align: left; }
+        th { background-color: #f9f9f9; color: #555; text-transform: uppercase; font-size: 0.85em; }
+        .anomaly-row { background-color: #fff0f0; font-weight: bold; }
+        .quantum-verdict { color: #d4af7a; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="loader-overlay">
+        <div class="loader"></div>
+    </div>
+
+    <nav>
+        <div class="logo">Q-Analyzer</div>
+        {% if user.is_authenticated %}
+        <div class="user-info">
+            Logged in as: <strong>{{ user.username }}</strong>
+            <form method="post" action="{% url 'logout' %}" style="display: inline;">
+                {% csrf_token %}
+                <button type="submit" class="logout-btn">Log Out</button>
+            </form>
+        </div>
+        {% endif %}
+    </nav>
+
+    <div class="main-container">
+        
+        <div class="card upload-box">
+            <h2>Upload Log File</h2>
+            <form method="POST" enctype="multipart/form-data" id="upload-form">
+                {% csrf_token %}
+                
+                <div class="file-upload-wrapper">
+                    <label for="log_file" class="file-upload-btn">Choose File</label>
+                    <input type="file" name="log_file" id="log_file" accept=".txt, .log" required>
+                    <span id="file-name-display">No file selected...</span>
+                </div>
+                
+                <br>
+                <button type="submit" class="submit-btn" id="analyze-button">Analyze File</button>
+            </form>
+        </div>
+
+        {% if results %}
+            <div class="card ai-explanation-box" {% if not ai_explanation %}style="display: none;"{% endif %}>
+                <h3>🤖 AI Security Analyst Report</h3>
+                <pre>{{ ai_explanation|default:"" }}</pre>
+            </div>
+
+            <div class="card results-box">
+                {% if chart_url %} 
+                <h3>📊 Bulk Analysis Summary</h3>
+                <p style="margin-bottom: 20px;">
+                    Total Logs Scanned: <strong>{{ total_scanned }}</strong> | 
+                    Anomalies Found: <strong style="color: #dc3545;">{{ total_anomalies }}</strong>
+                </p>
+                <div class="chart-container">
+                    <img src="{{ chart_url }}" alt="Analysis Chart">
+                </div>
+                {% endif %}
+
+                <h3 style="margin-top: 30px;">Raw Log Results</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Line #</th>
+                                <th>Log Entry</th>
+                                <th>Ollama Verdict</th>
+                                <th>Quantum Verdict</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line_num, result in results.items %}
+                                <tr class="{% if result.is_anomaly %}anomaly-row{% endif %}">
+                                    <td>{{ line_num }}</td>
+                                    <td>{{ result.log_entry }}</td>
+                                    <td>{{ result.ollama }}</td>
+                                    <td>
+                                        {% if result.quantum %}
+                                            <span class="quantum-verdict">{{ result.quantum }}</span>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('log_file');
+        const fileNameDisplay = document.getElementById('file-name-display');
+        
+        fileInput.addEventListener('change', function() {
+            if (fileInput.files.length > 0) {
+                fileNameDisplay.textContent = fileInput.files[0].name;
+            } else {
+                fileNameDisplay.textContent = 'No file selected...';
+            }
+        });
+
+        const uploadForm = document.getElementById('upload-form');
+        const loaderOverlay = document.getElementById('loader-overlay');
+        const analyzeButton = document.getElementById('analyze-button');
+
+        uploadForm.addEventListener('submit', function() {
+            if (fileInput.files.length > 0) {
+                loaderOverlay.style.display = 'flex';
+                analyzeButton.disabled = true;
+                analyzeButton.textContent = 'Analyzing...';
+            }
+        });
+    </script>
+
+</body>
+</html>

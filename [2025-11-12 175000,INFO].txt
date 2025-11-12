@@ -1,0 +1,7 @@
+[2025-11-12 17:50:00,INFO] User 'sara' viewed profile page. HTTP 200.
+[2025-11-12 17:51:00,INFO] Worker queue 5 processed 100 messages.
+[2025-11-12 17:52:00,WARN] Failed password for invalid user 'root' from 185.12.33.1
+[2025-11-12 17:53:00,ERROR] Database connection refused. ERROR CODE 1045.
+[2025-11-12 17:54:00,WARN] System performance degraded due to high CPU load. Retrying connection now.
+[2025-11-12 17:55:00,INFO] Client closed connection successfully.
+[2025-11-12 17:56:00,WARN] Possible SQL injection attempt from 45.12.33.1: ' OR 1=1 --
