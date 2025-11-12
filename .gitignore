@@ -1,0 +1,16 @@
+# Virtual Environments
+venv/
+venv4/
+venv_qb/  <-- This is the one that was missed
+
+# Python
+*.pyc
+__pycache__/
+*.env
+
+# Django
+db.sqlite3
+
+# Qiskit / ML Models
+*.pkl
+*.qml
